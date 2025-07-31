@@ -63,8 +63,20 @@ const SpotifyAuth: React.FC<SpotifyAuthProps> = ({ onAuthenticated }) => {
   }
 
   return (
-    <div className="auth-container">
-              <h1 className="auth-title">🎵 Spinmaster</h1>
+          <div className="auth-container">
+        <div style={{ marginBottom: '1rem' }}>
+          <img 
+            src="./SpinMaster.png" 
+            alt="SpinMaster Logo" 
+            style={{ 
+              width: '120px', 
+              height: '120px', 
+              borderRadius: '50%',
+              boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+            }} 
+          />
+        </div>
+        <h1 className="auth-title">SpinMaster</h1>
       <p className="auth-description">
         Connect to Spotify to play the ultimate music guessing game! 
         Test your knowledge of songs from different eras and genres.

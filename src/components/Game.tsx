@@ -391,7 +391,19 @@ const Game: React.FC = () => {
       <div className="game-container">
         {/* Header */}
         <div className="game-header">
-          <h1 className="game-title">🎵 Spinmaster</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
+            <img 
+              src="./SpinMaster.png" 
+              alt="SpinMaster Logo" 
+              style={{ 
+                width: '60px', 
+                height: '60px', 
+                borderRadius: '50%',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }} 
+            />
+            <h1 className="game-title">SpinMaster</h1>
+          </div>
           <p className="game-subtitle">
             Listen to the song, guess the details, then flip to see the answer!
           </p>

@@ -22,7 +22,19 @@ const PlaylistInput: React.FC<PlaylistInputProps> = ({ onSubmit, error }) => {
 
   return (
     <div className="auth-container">
-      <h1 className="auth-title">🎵 Choose Your Playlist</h1>
+      <div style={{ marginBottom: '1rem' }}>
+        <img 
+          src="./SpinMaster.png" 
+          alt="SpinMaster Logo" 
+          style={{ 
+            width: '80px', 
+            height: '80px', 
+            borderRadius: '50%',
+            boxShadow: '0 4px 8px rgba(0,0,0,0.2)'
+          }} 
+        />
+      </div>
+      <h1 className="auth-title">Choose Your Playlist</h1>
       <p className="auth-description">
         Paste a Spotify playlist URL to play with your favorite songs!
       </p>
