@@ -1,13 +1,13 @@
 # 🚀 Quick Setup Instructions
 
-Follow these steps to get your Hitster Clone up and running:
+Follow these steps to get your Spinmaster app up and running:
 
 ## 1. Create Spotify App (Most Important!)
 
 1. Go to https://developer.spotify.com/dashboard
 2. Click "Create app"
 3. Fill in the form:
-   - **App name**: "Hitster Clone" (or any name you prefer)
+   - **App name**: "Spinmaster" (or any name you prefer)
    - **App description**: "A music guessing game"
    - **Website**: http://localhost:3000
    - **Redirect URI**: http://localhost:3000

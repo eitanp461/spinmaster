@@ -42,18 +42,7 @@ const CardStack: React.FC<CardStackProps> = ({
         canPlay={canPlay}
       />
       
-      {/* Show remaining cards count */}
-      <div style={{
-        position: 'absolute',
-        bottom: '-60px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: '1rem',
-        textAlign: 'center'
-      }}>
-        Card {currentCardIndex + 1} of {cards.length}
-      </div>
+
     </div>
   );
 };

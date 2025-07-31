@@ -118,6 +118,36 @@ export const useSpotifyAPI = (token: string | null) => {
     }
   };
 
+  const getPlaylistDetails = useCallback(async (playlistId: string): Promise<{
+    id: string;
+    name: string;
+    description: string;
+    owner: { display_name: string };
+    tracks: { total: number };
+  }> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const playlist = await apiCall<{
+        id: string;
+        name: string;
+        description: string;
+        owner: { display_name: string };
+        tracks: { total: number };
+      }>(`/playlists/${playlistId}`);
+
+      console.log(`Fetched playlist details: ${playlist.name} by ${playlist.owner.display_name}`);
+      return playlist;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch playlist details';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiCall]);
+
   const getPlaylistTracks = useCallback(async (playlistId: string): Promise<SpotifyTrack[]> => {
     setLoading(true);
     setError(null);
@@ -170,6 +200,7 @@ export const useSpotifyAPI = (token: string | null) => {
     searchTracks,
     getRecommendations,
     getUserProfile,
+    getPlaylistDetails,
     getPlaylistTracks
   };
 };

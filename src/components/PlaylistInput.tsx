@@ -76,15 +76,21 @@ const PlaylistInput: React.FC<PlaylistInputProps> = ({ onSubmit, error }) => {
 
       <div style={{ marginTop: '2rem', fontSize: '0.9rem', opacity: 0.8 }}>
         <h3 style={{ marginBottom: '1rem' }}>How to get your playlist URL:</h3>
-        <ol style={{ textAlign: 'left', lineHeight: '1.6' }}>
-          <li><strong>Open Spotify</strong> (desktop, web, or mobile)</li>
-          <li><strong>Find your playlist</strong> or create a new one</li>
-          <li><strong>Click/tap the 3 dots (⋯)</strong> on the playlist</li>
-          <li><strong>Select "Share"</strong> → <strong>"Copy playlist link"</strong></li>
-          <li><strong>Paste the link above</strong> and click "Start Game"</li>
+        <ol style={{ 
+          textAlign: 'left', 
+          lineHeight: '1.6',
+          padding: '0 1rem',
+          maxWidth: '400px',
+          margin: '0 auto'
+        }}>
+          <li style={{ marginBottom: '0.5rem' }}><strong>Open Spotify</strong> (desktop, web, or mobile)</li>
+          <li style={{ marginBottom: '0.5rem' }}><strong>Find your playlist</strong> or create a new one</li>
+          <li style={{ marginBottom: '0.5rem' }}><strong>Click/tap the 3 dots (⋯)</strong> on the playlist</li>
+          <li style={{ marginBottom: '0.5rem' }}><strong>Select "Share"</strong> → <strong>"Copy playlist link"</strong></li>
+          <li style={{ marginBottom: '0.5rem' }}><strong>Paste the link above</strong> and click "Start Game"</li>
         </ol>
         
-        <div style={{ marginTop: '1rem' }}>
+        <div style={{ marginTop: '1.5rem' }}>
           <button 
             onClick={handleExampleClick}
             className="control-button"

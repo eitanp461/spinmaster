@@ -1,6 +1,6 @@
-# 🎵 Hitster Clone
+# 🎵 Spinmaster
 
-A responsive web application that replicates the core gameplay loop of Hitster using React, TypeScript, and the Spotify Web API.
+A responsive web application music guessing game using React, TypeScript, and the Spotify Web API.
 
 ## Features
 

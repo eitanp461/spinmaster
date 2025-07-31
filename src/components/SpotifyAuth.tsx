@@ -64,7 +64,7 @@ const SpotifyAuth: React.FC<SpotifyAuthProps> = ({ onAuthenticated }) => {
 
   return (
     <div className="auth-container">
-      <h1 className="auth-title">🎵 Hitster Clone</h1>
+              <h1 className="auth-title">🎵 Spinmaster</h1>
       <p className="auth-description">
         Connect to Spotify to play the ultimate music guessing game! 
         Test your knowledge of songs from different eras and genres.

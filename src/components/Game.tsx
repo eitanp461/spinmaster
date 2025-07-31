@@ -10,7 +10,7 @@ import { SAMPLE_TRACKS } from '../config/spotify';
 const Game: React.FC = () => {
   const { token, logout } = useSpotifyAuth();
   const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token);
-  const { getTracks, searchTracks, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token);
+  const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token);
   
   console.log('Game component rendered - Token:', !!token, 'API Loading:', apiLoading, 'Player Ready:', isReady);
   
@@ -22,10 +22,15 @@ const Game: React.FC = () => {
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [playlistUrl, setPlaylistUrl] = useState<string>('');
   const [showPlaylistInput, setShowPlaylistInput] = useState<boolean>(false);
+  const [playlistInfo, setPlaylistInfo] = useState<{
+    name: string;
+    owner: string;
+    totalTracks: number;
+  } | null>(null);
 
   // Check for saved playlist URL on component mount
   useEffect(() => {
-    const savedPlaylistUrl = localStorage.getItem('hitster_playlist_url');
+    const savedPlaylistUrl = localStorage.getItem('spinmaster_playlist_url');
     if (savedPlaylistUrl) {
       setPlaylistUrl(savedPlaylistUrl);
     } else {
@@ -69,6 +74,15 @@ const Game: React.FC = () => {
         }
 
         console.log('Loading tracks from playlist:', playlistId);
+        
+        // Fetch playlist details first
+        const playlistDetails = await getPlaylistDetails(playlistId);
+        setPlaylistInfo({
+          name: playlistDetails.name,
+          owner: playlistDetails.owner.display_name,
+          totalTracks: playlistDetails.tracks.total
+        });
+        
         tracks = await getPlaylistTracks(playlistId);
         
         if (tracks.length === 0) {
@@ -120,7 +134,7 @@ const Game: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, getTracks, getPlaylistTracks, playlistUrl]); // Include playlist dependencies
+  }, [token, getTracks, getPlaylistDetails, getPlaylistTracks, playlistUrl]); // Include playlist dependencies
 
   // Initialize game when component mounts - only once per token
   useEffect(() => {
@@ -234,7 +248,7 @@ const Game: React.FC = () => {
 
     console.log('Setting playlist URL:', url);
     setPlaylistUrl(url);
-    localStorage.setItem('hitster_playlist_url', url);
+    localStorage.setItem('spinmaster_playlist_url', url);
     setShowPlaylistInput(false);
     
     // Reset game state to trigger re-initialization with new playlist
@@ -243,17 +257,19 @@ const Game: React.FC = () => {
     setCards([]);
     setCurrentCardIndex(0);
     setError(null);
+    setPlaylistInfo(null);
   };
 
   // Clear saved playlist and show input again
   const handleChangePlaylist = () => {
-    localStorage.removeItem('hitster_playlist_url');
+    localStorage.removeItem('spinmaster_playlist_url');
     setPlaylistUrl('');
     setShowPlaylistInput(true);
     setIsInitialized(false);
     setGameStarted(false);
     setCards([]);
     setCurrentCardIndex(0);
+    setPlaylistInfo(null);
   };
 
   const displayError = error || playerError || apiError;
@@ -339,21 +355,27 @@ const Game: React.FC = () => {
       <div className="game-container">
         {/* Header */}
         <div className="game-header">
-          <h1 className="game-title">🎵 Hitster Clone</h1>
+          <h1 className="game-title">🎵 Spinmaster</h1>
           <p className="game-subtitle">
             Listen to the song, guess the details, then flip to see the answer!
           </p>
-          {playlistUrl && (
+          {playlistInfo && (
             <div style={{ 
-              color: 'rgba(255, 255, 255, 0.8)', 
+              color: 'rgba(255, 255, 255, 0.9)', 
               fontSize: '0.9rem', 
               marginTop: '1rem',
-              background: 'rgba(255, 255, 255, 0.1)',
-              padding: '8px 16px',
-              borderRadius: '15px',
-              backdropFilter: 'blur(10px)'
+              background: 'rgba(255, 255, 255, 0.15)',
+              padding: '12px 20px',
+              borderRadius: '20px',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
             }}>
-              🎵 Playing from your Spotify playlist ({cards.length} songs)
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                🎵 {playlistInfo.name}
+              </div>
+              <div style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                by {playlistInfo.owner} • {cards.length} songs loaded
+              </div>
             </div>
           )}
           {!isReady && (
@@ -372,6 +394,13 @@ const Game: React.FC = () => {
           isPlaying={isPlaying}
           canPlay={isReady}
         />
+
+        {/* Card Counter - Separate row */}
+        <div className="card-counter-row">
+          <div className="card-counter-display">
+            Card {currentCardIndex + 1} of {cards.length}
+          </div>
+        </div>
 
         {/* Game Controls */}
         <div className="game-controls">
@@ -424,22 +453,24 @@ const Game: React.FC = () => {
             Logout
           </button>
         </div>
-
-        {/* Game Complete Message */}
-        {isGameComplete && (
-          <div style={{
-            textAlign: 'center',
-            marginTop: '2rem',
-            padding: '1rem',
-            background: 'rgba(76, 175, 80, 0.2)',
-            borderRadius: '10px',
-            border: '1px solid rgba(76, 175, 80, 0.3)'
-          }}>
-            <h3>🎉 Congratulations!</h3>
-            <p>You've completed all the cards! Ready for another round?</p>
-          </div>
-        )}
       </div>
+
+      {/* Game Complete Message - Outside main grid to avoid conflicts */}
+      {isGameComplete && (
+        <div style={{
+          textAlign: 'center',
+          marginTop: '2rem',
+          padding: '1.5rem',
+          background: 'rgba(76, 175, 80, 0.2)',
+          borderRadius: '15px',
+          border: '1px solid rgba(76, 175, 80, 0.4)',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)'
+        }}>
+          <h3 style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🎉 Congratulations!</h3>
+          <p style={{ opacity: 0.9 }}>You've completed all the cards! Ready for another round?</p>
+        </div>
+      )}
     </div>
   );
 };

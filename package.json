@@ -1,7 +1,7 @@
 {
-  "name": "hitster-clone",
+  "name": "spinmaster",
   "version": "1.0.0",
-  "description": "A Hitster game clone using React, TypeScript, and Spotify Web API",
+  "description": "A music guessing game using React, TypeScript, and Spotify Web API",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

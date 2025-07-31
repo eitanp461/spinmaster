@@ -21,7 +21,7 @@ export const useSpotifyPlayer = (token: string | null) => {
       }
 
       const spotifyPlayer = new window.Spotify.Player({
-        name: 'Hitster Clone Player',
+        name: 'Spinmaster Player',
         getOAuthToken: (callback: (token: string) => void) => {
           callback(token);
         },
