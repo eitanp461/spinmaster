@@ -1,7 +1,15 @@
 // Spotify API Configuration
+const getRedirectUri = () => {
+  const isProduction = window.location.hostname === 'eitanp461.github.io';
+  if (isProduction) {
+    return 'https://eitanp461.github.io/spinmaster/';
+  }
+  return window.location.origin;
+};
+
 export const SPOTIFY_CONFIG = {
   CLIENT_ID: 'cd63ccc791a74dcabe3003a0369affef',
-  REDIRECT_URI: window.location.origin,
+  REDIRECT_URI: getRedirectUri(),
   SCOPES: [
     'streaming',
     'user-read-email',
