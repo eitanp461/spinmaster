@@ -39,11 +39,6 @@ const Card: React.FC<CardProps> = ({ card, onFlip, onPlay, isPlaying, canPlay })
           <div className="card-instructions">
             {canPlay ? 'Click to play the song' : 'Loading...'}
           </div>
-          {track && (
-            <div className="card-instructions" style={{ fontSize: '0.7rem', marginTop: '0.5rem', opacity: 0.7 }}>
-              Debug: {track.name} by {track.artists[0]?.name}
-            </div>
-          )}
           <div className="card-instructions" style={{ marginTop: '1rem', fontSize: '0.8rem' }}>
             Click anywhere on the card to reveal the answer
           </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import CardStack from './CardStack';
+import PlaylistInput from './PlaylistInput';
 import { GameCard, SpotifyTrack } from '../types/spotify';
 import { useSpotifyAuth } from '../hooks/useSpotifyAuth';
 import { useSpotifyPlayer } from '../hooks/useSpotifyPlayer';
@@ -9,7 +10,7 @@ import { SAMPLE_TRACKS } from '../config/spotify';
 const Game: React.FC = () => {
   const { token, logout } = useSpotifyAuth();
   const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token);
-  const { getTracks, searchTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token);
+  const { getTracks, searchTracks, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token);
   
   console.log('Game component rendered - Token:', !!token, 'API Loading:', apiLoading, 'Player Ready:', isReady);
   
@@ -19,6 +20,25 @@ const Game: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false); // Start with false, set to true during initialization
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [playlistUrl, setPlaylistUrl] = useState<string>('');
+  const [showPlaylistInput, setShowPlaylistInput] = useState<boolean>(false);
+
+  // Check for saved playlist URL on component mount
+  useEffect(() => {
+    const savedPlaylistUrl = localStorage.getItem('hitster_playlist_url');
+    if (savedPlaylistUrl) {
+      setPlaylistUrl(savedPlaylistUrl);
+    } else {
+      setShowPlaylistInput(true); // Show input if no playlist is saved
+    }
+  }, []);
+
+  // Utility function to extract playlist ID from Spotify URL
+  const extractPlaylistId = (url: string): string | null => {
+    const regex = /(?:https?:\/\/)?(?:open\.)?spotify\.com\/playlist\/([a-zA-Z0-9]+)/;
+    const match = url.match(regex);
+    return match ? match[1] : null;
+  };
 
   // Initialize game cards
   const initializeGame = useCallback(async () => {
@@ -39,53 +59,46 @@ const Game: React.FC = () => {
         throw new Error('No authentication token available');
       }
 
-      // Extract track IDs from Spotify URIs
-      const trackIds = SAMPLE_TRACKS.map(uri => uri.split(':')[2]);
-      console.log('Track IDs to fetch:', trackIds);
-      
-      // Fetch track metadata from Spotify API
-      const tracks = await getTracks(trackIds);
+      let tracks: SpotifyTrack[] = [];
+
+      // Check if we have a playlist URL
+      if (playlistUrl) {
+        const playlistId = extractPlaylistId(playlistUrl);
+        if (!playlistId) {
+          throw new Error('Invalid Spotify playlist URL. Please check the URL format.');
+        }
+
+        console.log('Loading tracks from playlist:', playlistId);
+        tracks = await getPlaylistTracks(playlistId);
+        
+        if (tracks.length === 0) {
+          throw new Error('No tracks found in the playlist or playlist is private.');
+        }
+      } else {
+        // Fallback to hardcoded tracks if no playlist URL
+        console.log('No playlist URL provided, using fallback tracks');
+        const trackIds = SAMPLE_TRACKS.map(uri => uri.split(':')[2]);
+        console.log('Track IDs to fetch:', trackIds);
+        
+        const fetchedTracks = await getTracks(trackIds);
+        tracks = fetchedTracks.filter((track): track is SpotifyTrack => track !== null);
+      }
+
       console.log('Fetched tracks:', tracks);
-      
-      // Filter out null tracks and create game cards
-      const validTracks = tracks.filter((track): track is SpotifyTrack => track !== null);
+      const validTracks = tracks;
       
       if (validTracks.length === 0) {
         throw new Error('No valid tracks found. Please check your track URIs.');
       }
 
       console.log('Creating game cards from tracks:');
-      console.log('🔍 TRACK ID VERIFICATION:');
+      
       const gameCards: GameCard[] = validTracks.map((track, index) => {
-        const originalIndex = trackIds.indexOf(track.id);
-        const spotifyUri = SAMPLE_TRACKS[originalIndex];
-        const expectedSong = [
-          'Never Gonna Give You Up - Rick Astley',
-          'Shape of You - Ed Sheeran', 
-          'Uptown Funk - Mark Ronson ft. Bruno Mars',
-          'Blinding Lights - The Weeknd',
-          'Don\'t Stop Believin\' - Journey',
-          'Billie Jean - Michael Jackson',
-          'Sweet Child O\' Mine - Guns N\' Roses',
-          'Someone Like You - Adele',
-          'Gangnam Style - PSY',
-          'Rolling in the Deep - Adele'
-        ][originalIndex];
-        
-        const actualSong = `${track.name} by ${track.artists[0]?.name}`;
-        const isMatch = actualSong.toLowerCase().includes(expectedSong.split(' - ')[0].toLowerCase());
-        
-        console.log(`❌ MISMATCH at index ${originalIndex}:`, {
-          expected: expectedSong,
-          actual: actualSong,
-          trackId: track.id,
-          spotifyUri: spotifyUri,
-          match: isMatch ? '✅' : '❌'
-        });
+        console.log(`Card ${index}: ${track.name} by ${track.artists[0]?.name}`);
         
         return {
           id: `card-${index}`,
-          spotifyUri: spotifyUri, // Match with original URI
+          spotifyUri: track.uri, // Use the track's actual URI
           track,
           isFlipped: false,
           isActive: index === 0
@@ -107,7 +120,7 @@ const Game: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, getTracks]); // Now safe since getTracks is memoized
+  }, [token, getTracks, getPlaylistTracks, playlistUrl]); // Include playlist dependencies
 
   // Initialize game when component mounts - only once per token
   useEffect(() => {
@@ -116,16 +129,18 @@ const Game: React.FC = () => {
       isInitialized, 
       loading, 
       gameStarted,
-      apiLoading
+      apiLoading,
+      hasPlaylistUrl: !!playlistUrl,
+      showPlaylistInput
     });
     
-    if (token && !isInitialized && !gameStarted) {
+    if (token && !isInitialized && !gameStarted && !showPlaylistInput) {
       console.log('All conditions met - initializing game...');
       initializeGame();
     } else {
       console.log('Conditions not met for game initialization');
     }
-  }, [token, isInitialized, gameStarted, initializeGame]); // Removed loading dependency
+  }, [token, isInitialized, gameStarted, playlistUrl, showPlaylistInput, initializeGame]); // Added playlist dependencies
 
   const handleCardFlip = async (cardId: string) => {
     // Pause playback when card is flipped (revealing the answer)
@@ -209,42 +224,44 @@ const Game: React.FC = () => {
     // initializeGame will be called by useEffect due to state changes
   };
 
-  // Helper function to search for correct track IDs
-  const searchForCorrectTracks = async () => {
-    const expectedSongs = [
-      'Never Gonna Give You Up Rick Astley',
-      'Shape of You Ed Sheeran', 
-      'Uptown Funk Mark Ronson Bruno Mars',
-      'Blinding Lights The Weeknd',
-      'Don\'t Stop Believin\' Journey',
-      'Billie Jean Michael Jackson',
-      'Sweet Child O\' Mine Guns N\' Roses',
-      'Someone Like You Adele',
-      'Gangnam Style PSY',
-      'Rolling in the Deep Adele'
-    ];
-
-    console.log('🔍 SEARCHING FOR CORRECT TRACK IDs:');
-    
-    for (let i = 0; i < expectedSongs.length; i++) {
-      try {
-        const results = await searchTracks(expectedSongs[i], 1);
-        if (results.length > 0) {
-          const track = results[0];
-          console.log(`✅ ${expectedSongs[i]}:`);
-          console.log(`   Correct ID: ${track.id}`);
-          console.log(`   Correct URI: spotify:track:${track.id}`);
-          console.log(`   Track: ${track.name} by ${track.artists[0]?.name}`);
-        } else {
-          console.log(`❌ No results for: ${expectedSongs[i]}`);
-        }
-      } catch (err) {
-        console.error(`Error searching for ${expectedSongs[i]}:`, err);
-      }
+  // Handle playlist URL submission
+  const handlePlaylistSubmit = (url: string) => {
+    const playlistId = extractPlaylistId(url);
+    if (!playlistId) {
+      setError('Invalid Spotify playlist URL. Please make sure you copy the full URL from Spotify.');
+      return;
     }
+
+    console.log('Setting playlist URL:', url);
+    setPlaylistUrl(url);
+    localStorage.setItem('hitster_playlist_url', url);
+    setShowPlaylistInput(false);
+    
+    // Reset game state to trigger re-initialization with new playlist
+    setIsInitialized(false);
+    setGameStarted(false);
+    setCards([]);
+    setCurrentCardIndex(0);
+    setError(null);
+  };
+
+  // Clear saved playlist and show input again
+  const handleChangePlaylist = () => {
+    localStorage.removeItem('hitster_playlist_url');
+    setPlaylistUrl('');
+    setShowPlaylistInput(true);
+    setIsInitialized(false);
+    setGameStarted(false);
+    setCards([]);
+    setCurrentCardIndex(0);
   };
 
   const displayError = error || playerError || apiError;
+
+  // Show playlist input if needed
+  if (showPlaylistInput) {
+    return <PlaylistInput onSubmit={handlePlaylistSubmit} error={displayError} />;
+  }
 
   if (loading || apiLoading) {
     return (
@@ -326,6 +343,19 @@ const Game: React.FC = () => {
           <p className="game-subtitle">
             Listen to the song, guess the details, then flip to see the answer!
           </p>
+          {playlistUrl && (
+            <div style={{ 
+              color: 'rgba(255, 255, 255, 0.8)', 
+              fontSize: '0.9rem', 
+              marginTop: '1rem',
+              background: 'rgba(255, 255, 255, 0.1)',
+              padding: '8px 16px',
+              borderRadius: '15px',
+              backdropFilter: 'blur(10px)'
+            }}>
+              🎵 Playing from your Spotify playlist ({cards.length} songs)
+            </div>
+          )}
           {!isReady && (
             <div style={{ color: '#ffeb3b', fontSize: '0.9rem', marginTop: '1rem' }}>
               ⚠️ Spotify player is not ready. Make sure you have Spotify Premium and try refreshing the page.
@@ -380,10 +410,10 @@ const Game: React.FC = () => {
           
           <button
             className="control-button"
-            onClick={searchForCorrectTracks}
+            onClick={handleChangePlaylist}
             style={{ background: 'rgba(255, 193, 7, 0.3)' }}
           >
-            🔍 Find Correct IDs
+            🎵 Change Playlist
           </button>
           
           <button

@@ -118,6 +118,50 @@ export const useSpotifyAPI = (token: string | null) => {
     }
   };
 
+  const getPlaylistTracks = useCallback(async (playlistId: string): Promise<SpotifyTrack[]> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      let allTracks: SpotifyTrack[] = [];
+      let offset = 0;
+      const limit = 50; // Spotify API limit per request
+
+      while (true) {
+        const response = await apiCall<{
+          items: Array<{
+            track: SpotifyTrack | null;
+          }>;
+          next: string | null;
+          total: number;
+        }>(`/playlists/${playlistId}/tracks?offset=${offset}&limit=${limit}`);
+
+        // Filter out null tracks and extract track objects
+        const validTracks = response.items
+          .map(item => item.track)
+          .filter((track): track is SpotifyTrack => track !== null);
+
+        allTracks = allTracks.concat(validTracks);
+
+        // Check if there are more tracks to fetch
+        if (!response.next) {
+          break;
+        }
+
+        offset += limit;
+      }
+
+      console.log(`Fetched ${allTracks.length} tracks from playlist ${playlistId}`);
+      return allTracks;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch playlist tracks';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [apiCall]);
+
   return {
     loading,
     error,
@@ -125,6 +169,7 @@ export const useSpotifyAPI = (token: string | null) => {
     getTracks,
     searchTracks,
     getRecommendations,
-    getUserProfile
+    getUserProfile,
+    getPlaylistTracks
   };
 };
