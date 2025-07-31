@@ -61,7 +61,20 @@ const Game: React.FC = () => {
 
       // Check if we have a valid token
       if (!token) {
-        throw new Error('No authentication token available');
+        throw new Error('Authentication required. Please refresh the page and log in to Spotify.');
+      }
+
+      // Validate token hasn't expired
+      const savedExpiry = localStorage.getItem('spotify_token_expiry');
+      if (savedExpiry) {
+        const expiryTime = parseInt(savedExpiry);
+        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+        if (Date.now() >= (expiryTime - bufferTime)) {
+          localStorage.removeItem('spotify_access_token');
+          localStorage.removeItem('spotify_token_expiry');
+          localStorage.removeItem('spotify_auth_completed');
+          throw new Error('Your session has expired. Please refresh the page and log in again.');
+        }
       }
 
       let tracks: SpotifyTrack[] = [];
@@ -304,24 +317,47 @@ const Game: React.FC = () => {
   }
 
   if (displayError) {
+    const isAuthError = displayError.toLowerCase().includes('authentication') || 
+                       displayError.toLowerCase().includes('session') ||
+                       displayError.toLowerCase().includes('expired') ||
+                       displayError.toLowerCase().includes('log in');
+    
     return (
       <div className="game-container">
         <div className="error">
-          <h3>Game Error</h3>
+          <h3>{isAuthError ? 'Authentication Error' : 'Game Error'}</h3>
           <p>{displayError}</p>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button className="control-button" onClick={handleFullRestart}>
-              Retry
-            </button>
-            <button className="control-button" onClick={() => {
-              localStorage.clear();
-              window.location.reload();
-            }}>
-              Clear & Restart
-            </button>
-            <button className="control-button" onClick={logout}>
-              Logout
-            </button>
+            {isAuthError ? (
+              <>
+                <button className="control-button" onClick={() => {
+                  localStorage.removeItem('spotify_access_token');
+                  localStorage.removeItem('spotify_token_expiry');
+                  localStorage.removeItem('spotify_auth_completed');
+                  window.location.reload();
+                }}>
+                  🔄 Refresh & Login
+                </button>
+                <button className="control-button" onClick={logout}>
+                  🚪 Logout
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="control-button" onClick={handleFullRestart}>
+                  🔄 Retry
+                </button>
+                <button className="control-button" onClick={() => {
+                  localStorage.clear();
+                  window.location.reload();
+                }}>
+                  🧹 Clear & Restart
+                </button>
+                <button className="control-button" onClick={logout}>
+                  🚪 Logout
+                </button>
+              </>
+            )}
           </div>
           <details style={{ marginTop: '1rem', fontSize: '0.8rem', opacity: 0.7 }}>
             <summary>Debug Info</summary>

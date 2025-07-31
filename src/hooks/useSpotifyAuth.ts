@@ -16,15 +16,21 @@ export const useSpotifyAuth = () => {
 
     if (savedToken && savedExpiry) {
       const expiryTime = parseInt(savedExpiry);
-      if (Date.now() < expiryTime) {
+      const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+      const now = Date.now();
+      
+      if (now < (expiryTime - bufferTime)) {
+        console.log('Valid token found, expires in:', Math.round((expiryTime - now) / 60000), 'minutes');
         setToken(savedToken);
         setIsAuthenticated(true);
         setIsLoading(false);
         return;
       } else {
-        // Token expired, remove it
+        // Token expired or about to expire, remove it
+        console.log('Token expired or about to expire, removing...');
         localStorage.removeItem('spotify_access_token');
         localStorage.removeItem('spotify_token_expiry');
+        localStorage.removeItem('spotify_auth_completed');
       }
     }
 

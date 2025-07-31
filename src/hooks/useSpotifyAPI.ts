@@ -6,24 +6,58 @@ export const useSpotifyAPI = (token: string | null) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiCall = useCallback(async <T>(endpoint: string): Promise<T> => {
+  const apiCall = useCallback(async <T>(endpoint: string, retryCount = 0): Promise<T> => {
     if (!token) {
-      throw new Error('No access token available');
+      throw new Error('Authentication required. Please log in to Spotify.');
     }
 
-    const response = await fetch(`${SPOTIFY_CONFIG.API_BASE_URL}${endpoint}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    try {
+      const response = await fetch(`${SPOTIFY_CONFIG.API_BASE_URL}${endpoint}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
-    if (!response.ok) {
-      const errorData: SpotifyError = await response.json();
-      throw new Error(errorData.error.message || `API call failed: ${response.status}`);
+      if (!response.ok) {
+        // Handle authentication errors specifically
+        if (response.status === 401) {
+          if (retryCount < 1) {
+            console.log('Token may be expired, clearing auth state...');
+            // Clear auth state to force re-login
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_token_expiry');
+            localStorage.removeItem('spotify_auth_completed');
+            
+            throw new Error('Your session has expired. Please refresh the page and log in again.');
+          }
+        }
+        
+        let errorMessage = `API call failed (${response.status})`;
+        try {
+          const errorData: SpotifyError = await response.json();
+          errorMessage = errorData.error.message || errorMessage;
+        } catch {
+          // If we can't parse error, use the status-based message
+        }
+        
+        if (response.status === 403) {
+          errorMessage = 'Access forbidden. You may need Spotify Premium for music playback.';
+        } else if (response.status === 429) {
+          errorMessage = 'Too many requests. Please wait a moment and try again.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      return response.json();
+    } catch (err) {
+      // Network errors or other fetch issues
+      if (err instanceof TypeError && err.message.includes('fetch')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+      throw err;
     }
-
-    return response.json();
   }, [token]);
 
   const getTrack = async (trackId: string): Promise<SpotifyTrack> => {

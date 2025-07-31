@@ -16,7 +16,7 @@ const PlaylistInput: React.FC<PlaylistInputProps> = ({ onSubmit, error }) => {
   };
 
   const handleExampleClick = () => {
-    const exampleUrl = 'https://open.spotify.com/playlist/1y9xf4z8Jd9XtCg3W0TJrg';
+    const exampleUrl = 'https://open.spotify.com/playlist/7aB6UPU4A6Lkri1fDNtXhS';
     setInputUrl(exampleUrl);
   };
 
