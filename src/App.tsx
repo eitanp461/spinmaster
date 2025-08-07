@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import SpotifyAuth from './components/SpotifyAuth';
 import Game from './components/Game';
 import { useSpotifyAuth } from './hooks/useSpotifyAuth';
@@ -13,6 +13,13 @@ const App: React.FC = () => {
     console.log('handleAuthenticated called');
     setGameReady(true);
   };
+
+  // Reset gameReady when user logs out (isAuthenticated becomes false)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setGameReady(false);
+    }
+  }, [isAuthenticated]);
 
   if (isLoading) {
     console.log('App: showing loading state');

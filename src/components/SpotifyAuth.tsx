@@ -6,7 +6,7 @@ interface SpotifyAuthProps {
 }
 
 const SpotifyAuth: React.FC<SpotifyAuthProps> = ({ onAuthenticated }) => {
-  const { isAuthenticated, isLoading, error, login } = useSpotifyAuth();
+  const { isAuthenticated, isLoading, error, isRefreshing, login } = useSpotifyAuth();
 
   React.useEffect(() => {
     if (isAuthenticated) {
@@ -14,14 +14,14 @@ const SpotifyAuth: React.FC<SpotifyAuthProps> = ({ onAuthenticated }) => {
     }
   }, [isAuthenticated, onAuthenticated]);
 
-  if (isLoading) {
+  if (isLoading || isRefreshing) {
     return (
       <div className="auth-container">
         <div className="loading">
           <div className="spinner"></div>
-          <p>Connecting to Spotify...</p>
+          <p>{isRefreshing ? 'Refreshing session...' : 'Connecting to Spotify...'}</p>
           <div style={{ marginTop: '1rem', fontSize: '0.8rem', opacity: 0.7 }}>
-            <p>Processing authentication...</p>
+            <p>{isRefreshing ? 'Updating your authentication...' : 'Processing authentication...'}</p>
           </div>
         </div>
       </div>

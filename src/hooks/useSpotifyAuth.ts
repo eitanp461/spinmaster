@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { SpotifyAuthToken } from '../types/spotify';
 import { SPOTIFY_CONFIG, generateRandomString, sha256, base64encode } from '../config/spotify';
 
@@ -8,11 +8,13 @@ export const useSpotifyAuth = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessingCallback, setIsProcessingCallback] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   useEffect(() => {
     // Check for existing token in localStorage
     const savedToken = localStorage.getItem('spotify_access_token');
     const savedExpiry = localStorage.getItem('spotify_token_expiry');
+    const savedRefreshToken = localStorage.getItem('spotify_refresh_token');
 
     if (savedToken && savedExpiry) {
       const expiryTime = parseInt(savedExpiry);
@@ -25,9 +27,15 @@ export const useSpotifyAuth = () => {
         setIsAuthenticated(true);
         setIsLoading(false);
         return;
+      } else if (savedRefreshToken) {
+        // Token expired but we have a refresh token, try to refresh
+        console.log('Token expired, attempting refresh...');
+        // We'll handle this in a separate effect after refreshToken is defined
+        setIsLoading(false); // Set to false for now, the refresh effect will handle it
+        return;
       } else {
-        // Token expired or about to expire, remove it
-        console.log('Token expired or about to expire, removing...');
+        // Token expired and no refresh token, remove it
+        console.log('Token expired and no refresh token, removing...');
         localStorage.removeItem('spotify_access_token');
         localStorage.removeItem('spotify_token_expiry');
         localStorage.removeItem('spotify_auth_completed');
@@ -91,10 +99,15 @@ export const useSpotifyAuth = () => {
         const tokenData = await exchangeCodeForToken(code, codeVerifier);
         console.log('Token exchange successful');
         
-        // Save token and expiry time
+        // Save token, refresh token, and expiry time
         const expiryTime = Date.now() + (tokenData.expires_in * 1000);
         localStorage.setItem('spotify_access_token', tokenData.access_token);
         localStorage.setItem('spotify_token_expiry', expiryTime.toString());
+        
+        // Save refresh token if provided
+        if (tokenData.refresh_token) {
+          localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
+        }
         
         // Mark auth as completed to prevent re-processing
         localStorage.setItem('spotify_auth_completed', 'true');
@@ -175,6 +188,111 @@ export const useSpotifyAuth = () => {
     return response.json();
   };
 
+  const refreshToken = useCallback(async (): Promise<boolean> => {
+    const refreshTokenValue = localStorage.getItem('spotify_refresh_token');
+    
+    if (!refreshTokenValue) {
+      console.log('No refresh token available');
+      return false;
+    }
+
+    if (isRefreshing) {
+      console.log('Token refresh already in progress');
+      return false;
+    }
+
+    setIsRefreshing(true);
+    
+    try {
+      console.log('Attempting to refresh token...');
+      
+      const params = {
+        client_id: SPOTIFY_CONFIG.CLIENT_ID,
+        grant_type: 'refresh_token',
+        refresh_token: refreshTokenValue,
+      };
+
+      const response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(params),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Token refresh failed:', errorData);
+        
+        // If refresh token is invalid, clear all auth data
+        if (response.status === 400 && errorData.error === 'invalid_grant') {
+          console.log('Refresh token invalid, clearing auth state');
+          logout();
+          return false;
+        }
+        
+        throw new Error(errorData.error_description || 'Token refresh failed');
+      }
+
+      const tokenData: SpotifyAuthToken = await response.json();
+      console.log('Token refresh successful');
+
+      // Update stored tokens
+      const expiryTime = Date.now() + (tokenData.expires_in * 1000);
+      localStorage.setItem('spotify_access_token', tokenData.access_token);
+      localStorage.setItem('spotify_token_expiry', expiryTime.toString());
+      
+      // Update refresh token if a new one is provided
+      if (tokenData.refresh_token) {
+        localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
+      }
+
+      // Update state
+      setToken(tokenData.access_token);
+      setIsAuthenticated(true);
+      setError(null);
+
+      return true;
+    } catch (err) {
+      console.error('Token refresh error:', err);
+      setError(err instanceof Error ? err.message : 'Token refresh failed');
+      return false;
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
+
+  // Separate effect to handle token refresh on app load
+  useEffect(() => {
+    const checkAndRefreshToken = async () => {
+      const savedToken = localStorage.getItem('spotify_access_token');
+      const savedExpiry = localStorage.getItem('spotify_token_expiry');
+      const savedRefreshToken = localStorage.getItem('spotify_refresh_token');
+
+      if (savedToken && savedExpiry && savedRefreshToken) {
+        const expiryTime = parseInt(savedExpiry);
+        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
+        const now = Date.now();
+        
+        // If token is expired or about to expire, but we have a refresh token
+        if (now >= (expiryTime - bufferTime)) {
+          console.log('Token expired on load, attempting refresh...');
+          setIsLoading(true);
+          const success = await refreshToken();
+          if (!success) {
+            console.log('Token refresh failed on load');
+          }
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Only run this if we're not already loading and not authenticated
+    if (!isLoading && !isAuthenticated && !isProcessingCallback) {
+      checkAndRefreshToken();
+    }
+  }, [refreshToken, isLoading, isAuthenticated, isProcessingCallback]);
+
   const login = async () => {
     try {
       const codeVerifier = generateRandomString(64);
@@ -203,6 +321,7 @@ export const useSpotifyAuth = () => {
 
   const logout = () => {
     localStorage.removeItem('spotify_access_token');
+    localStorage.removeItem('spotify_refresh_token');
     localStorage.removeItem('spotify_token_expiry');
     localStorage.removeItem('spotify_auth_completed');
     localStorage.removeItem('spotify_auth_state');
@@ -210,6 +329,7 @@ export const useSpotifyAuth = () => {
     setToken(null);
     setIsAuthenticated(false);
     setIsProcessingCallback(false);
+    setIsRefreshing(false);
   };
 
   return {
@@ -217,7 +337,9 @@ export const useSpotifyAuth = () => {
     isAuthenticated,
     isLoading,
     error,
+    isRefreshing,
     login,
-    logout
+    logout,
+    refreshToken
   };
 };

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { SpotifyTrack, SpotifyError } from '../types/spotify';
 import { SPOTIFY_CONFIG } from '../config/spotify';
 
-export const useSpotifyAPI = (token: string | null) => {
+export const useSpotifyAPI = (token: string | null, refreshToken?: () => Promise<boolean>) => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,10 +22,53 @@ export const useSpotifyAPI = (token: string | null) => {
       if (!response.ok) {
         // Handle authentication errors specifically
         if (response.status === 401) {
-          if (retryCount < 1) {
-            console.log('Token may be expired, clearing auth state...');
+          if (retryCount < 1 && refreshToken) {
+            console.log('Token expired, attempting refresh before retry...');
+            const refreshSuccess = await refreshToken();
+            
+            if (refreshSuccess) {
+              console.log('Token refreshed successfully, retrying API call...');
+              // Get the new token from localStorage and retry the call
+              const newToken = localStorage.getItem('spotify_access_token');
+              if (newToken) {
+                const retryResponse = await fetch(`${SPOTIFY_CONFIG.API_BASE_URL}${endpoint}`, {
+                  headers: {
+                    'Authorization': `Bearer ${newToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+                
+                if (retryResponse.ok) {
+                  return retryResponse.json();
+                }
+                
+                // If retry also fails, fall through to regular error handling
+                console.log('API call failed even after token refresh');
+              }
+            } else {
+              console.log('Token refresh failed, clearing auth state...');
+              // Clear auth state to force re-login
+              localStorage.removeItem('spotify_access_token');
+              localStorage.removeItem('spotify_refresh_token');
+              localStorage.removeItem('spotify_token_expiry');
+              localStorage.removeItem('spotify_auth_completed');
+              
+              throw new Error('Your session has expired. Please refresh the page and log in again.');
+            }
+          } else if (retryCount >= 1) {
+            console.log('API call failed after retry, clearing auth state...');
             // Clear auth state to force re-login
             localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_refresh_token');
+            localStorage.removeItem('spotify_token_expiry');
+            localStorage.removeItem('spotify_auth_completed');
+            
+            throw new Error('Your session has expired. Please refresh the page and log in again.');
+          } else {
+            // No refresh function provided
+            console.log('Token expired but no refresh function available...');
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_refresh_token');
             localStorage.removeItem('spotify_token_expiry');
             localStorage.removeItem('spotify_auth_completed');
             
@@ -58,7 +101,7 @@ export const useSpotifyAPI = (token: string | null) => {
       }
       throw err;
     }
-  }, [token]);
+  }, [token, refreshToken]);
 
   const getTrack = async (trackId: string): Promise<SpotifyTrack> => {
     setLoading(true);

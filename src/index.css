@@ -288,9 +288,9 @@ body {
 }
 
 .spotify-login-button:hover {
-  background: #1ed760;
+  background: #1aa34a;
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(29, 185, 84, 0.3);
+  box-shadow: 0 10px 20px rgba(29, 185, 84, 0.4);
 }
 
 /* Loading States */

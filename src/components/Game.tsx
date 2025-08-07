@@ -8,9 +8,9 @@ import { useSpotifyAPI } from '../hooks/useSpotifyAPI';
 import { SAMPLE_TRACKS } from '../config/spotify';
 
 const Game: React.FC = () => {
-  const { token, logout } = useSpotifyAuth();
+  const { token, logout, refreshToken } = useSpotifyAuth();
   const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token);
-  const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token);
+  const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token, refreshToken);
   
   console.log('Game component rendered - Token:', !!token, 'API Loading:', apiLoading, 'Player Ready:', isReady);
   
@@ -64,18 +64,7 @@ const Game: React.FC = () => {
         throw new Error('Authentication required. Please refresh the page and log in to Spotify.');
       }
 
-      // Validate token hasn't expired
-      const savedExpiry = localStorage.getItem('spotify_token_expiry');
-      if (savedExpiry) {
-        const expiryTime = parseInt(savedExpiry);
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-        if (Date.now() >= (expiryTime - bufferTime)) {
-          localStorage.removeItem('spotify_access_token');
-          localStorage.removeItem('spotify_token_expiry');
-          localStorage.removeItem('spotify_auth_completed');
-          throw new Error('Your session has expired. Please refresh the page and log in again.');
-        }
-      }
+      // Token validation is now handled by useSpotifyAuth hook
 
       let tracks: SpotifyTrack[] = [];
 
@@ -330,14 +319,15 @@ const Game: React.FC = () => {
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
             {isAuthError ? (
               <>
-                <button className="control-button" onClick={() => {
-                  localStorage.removeItem('spotify_access_token');
-                  localStorage.removeItem('spotify_token_expiry');
-                  localStorage.removeItem('spotify_auth_completed');
-                  window.location.reload();
-                }}>
-                  🔄 Refresh & Login
-                </button>
+                              <button className="control-button" onClick={() => {
+                localStorage.removeItem('spotify_access_token');
+                localStorage.removeItem('spotify_refresh_token');
+                localStorage.removeItem('spotify_token_expiry');
+                localStorage.removeItem('spotify_auth_completed');
+                window.location.reload();
+              }}>
+                🔄 Refresh & Login
+              </button>
                 <button className="control-button" onClick={logout}>
                   🚪 Logout
                 </button>
