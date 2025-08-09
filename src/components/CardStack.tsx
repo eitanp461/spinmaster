@@ -9,6 +9,8 @@ interface CardStackProps {
   onCardPlay: (cardId: string) => void;
   isPlaying: boolean;
   canPlay: boolean;
+  overlayTopLeft?: React.ReactNode;
+  overlayTopRight?: React.ReactNode;
 }
 
 const CardStack: React.FC<CardStackProps> = ({
@@ -17,7 +19,9 @@ const CardStack: React.FC<CardStackProps> = ({
   onCardFlip,
   onCardPlay,
   isPlaying,
-  canPlay
+  canPlay,
+  overlayTopLeft,
+  overlayTopRight
 }) => {
   const currentCard = cards[currentCardIndex];
 
@@ -40,6 +44,8 @@ const CardStack: React.FC<CardStackProps> = ({
         onPlay={() => onCardPlay(currentCard.id)}
         isPlaying={isPlaying}
         canPlay={canPlay}
+        overlayTopLeft={overlayTopLeft}
+        overlayTopRight={overlayTopRight}
       />
       
 

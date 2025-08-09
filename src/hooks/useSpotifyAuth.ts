@@ -30,8 +30,37 @@ export const useSpotifyAuth = () => {
       } else if (savedRefreshToken) {
         // Token expired but we have a refresh token, try to refresh
         console.log('Token expired, attempting refresh...');
-        // We'll handle this in a separate effect after refreshToken is defined
-        setIsLoading(false); // Set to false for now, the refresh effect will handle it
+        // Do refresh immediately to simplify flow
+        fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: SPOTIFY_CONFIG.CLIENT_ID,
+            grant_type: 'refresh_token',
+            refresh_token: savedRefreshToken,
+          }),
+        })
+          .then(async res => {
+            if (!res.ok) throw await res.json();
+            return res.json();
+          })
+          .then((tokenData: SpotifyAuthToken) => {
+            const newExpiry = Date.now() + tokenData.expires_in * 1000;
+            localStorage.setItem('spotify_access_token', tokenData.access_token);
+            localStorage.setItem('spotify_token_expiry', String(newExpiry));
+            if (tokenData.refresh_token) {
+              localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
+            }
+            setToken(tokenData.access_token);
+            setIsAuthenticated(true);
+          })
+          .catch(() => {
+            localStorage.removeItem('spotify_access_token');
+            localStorage.removeItem('spotify_refresh_token');
+            localStorage.removeItem('spotify_token_expiry');
+            localStorage.removeItem('spotify_auth_completed');
+          })
+          .finally(() => setIsLoading(false));
         return;
       } else {
         // Token expired and no refresh token, remove it
@@ -270,36 +299,7 @@ export const useSpotifyAuth = () => {
     }
   }, [isRefreshing]);
 
-  // Separate effect to handle token refresh on app load
-  useEffect(() => {
-    const checkAndRefreshToken = async () => {
-      const savedToken = localStorage.getItem('spotify_access_token');
-      const savedExpiry = localStorage.getItem('spotify_token_expiry');
-      const savedRefreshToken = localStorage.getItem('spotify_refresh_token');
-
-      if (savedToken && savedExpiry && savedRefreshToken) {
-        const expiryTime = parseInt(savedExpiry);
-        const bufferTime = 5 * 60 * 1000; // 5 minutes buffer
-        const now = Date.now();
-        
-        // If token is expired or about to expire, but we have a refresh token
-        if (now >= (expiryTime - bufferTime)) {
-          console.log('Token expired on load, attempting refresh...');
-          setIsLoading(true);
-          const success = await refreshToken();
-          if (!success) {
-            console.log('Token refresh failed on load');
-          }
-          setIsLoading(false);
-        }
-      }
-    };
-
-    // Only run this if we're not already loading and not authenticated
-    if (!isLoading && !isAuthenticated && !isProcessingCallback) {
-      checkAndRefreshToken();
-    }
-  }, [refreshToken, isLoading, isAuthenticated, isProcessingCallback]);
+  // Simplify: remove the separate token-refresh-on-load effect; we refresh in the first load effect above
 
   // Set up periodic token refresh
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { SpotifyPlayer, SpotifyPlaybackState } from '../types/spotify';
 
-export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Promise<boolean>) => {
+export const useSpotifyPlayer = (token: string | null) => {
   const [player, setPlayer] = useState<SpotifyPlayer | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [isReady, setIsReady] = useState<boolean>(false);
@@ -10,15 +10,17 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
   const [error, setError] = useState<string | null>(null);
   const playerRef = useRef<SpotifyPlayer | null>(null);
   const tokenRef = useRef<string | null>(token);
+  const hasInitializedRef = useRef<boolean>(false);
 
   // Check if user has Spotify Premium
   const checkPremiumStatus = async () => {
-    if (!token) return false;
+    const authToken = tokenRef.current || token;
+    if (!authToken) return false;
     
     try {
       const response = await fetch('https://api.spotify.com/v1/me', {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         }
       });
       
@@ -39,14 +41,17 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
   }, [token]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || hasInitializedRef.current) return;
 
     // Initialize Spotify Web Playback SDK
     const initializePlayer = async () => {
       if (!window.Spotify) {
-        setError('Spotify Web Playback SDK not loaded');
+        setError('Spotify SDK not loaded');
         return;
       }
+
+      // Ensure the latest token is available to the SDK callback
+      tokenRef.current = token;
 
       // Check premium status before initializing player
       const hasPremium = await checkPremiumStatus();
@@ -59,34 +64,12 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
       const spotifyPlayer = new window.Spotify.Player({
         name: 'Spinmaster Player',
         getOAuthToken: async (callback: (token: string) => void) => {
-          console.log('SDK requesting token...');
-          
-          // Check if current token is still valid
-          const currentToken = tokenRef.current;
+          // Keep it simple: use in-memory token managed by auth hook
+          const currentToken = tokenRef.current || token;
           if (!currentToken) {
-            console.error('No token available for SDK');
             setError('No authentication token available');
             return;
           }
-
-          // Try to refresh token if we have a refresh function
-          if (refreshToken) {
-            try {
-              const refreshed = await refreshToken();
-              if (refreshed) {
-                const newToken = tokenRef.current;
-                if (newToken) {
-                  console.log('Using refreshed token for SDK');
-                  callback(newToken);
-                  return;
-                }
-              }
-            } catch (err) {
-              console.error('Token refresh failed in SDK callback:', err);
-            }
-          }
-
-          console.log('Using current token for SDK');
           callback(currentToken);
         },
         volume: 0.5
@@ -94,18 +77,15 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
 
       // Error handling
       spotifyPlayer.addListener('initialization_error', ({ message }: { message: string }) => {
-        console.error('Failed to initialize:', message);
         setError(`Initialization error: ${message}`);
       });
 
       spotifyPlayer.addListener('authentication_error', ({ message }: { message: string }) => {
-        console.error('Failed to authenticate:', message);
         setError(`Authentication error: ${message}`);
       });
 
       spotifyPlayer.addListener('account_error', ({ message }: { message: string }) => {
-        console.error('Failed to validate Spotify account:', message);
-        setError(`Account error: ${message}. You need Spotify Premium to use the Web Playback SDK. Please upgrade your Spotify account or use the Spotify app directly.`);
+        setError(`Account error: ${message}. Spotify Premium is required.`);
       });
 
       spotifyPlayer.addListener('playback_error', ({ message }: { message: string }) => {
@@ -139,20 +119,16 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
       const connectWithRetry = async (retries = 3) => {
         for (let i = 0; i < retries; i++) {
           try {
-            console.log(`Attempting to connect to Spotify (attempt ${i + 1}/${retries})...`);
             const success = await spotifyPlayer.connect();
             if (success) {
-              console.log('Successfully connected to Spotify!');
               setError(null);
               return;
             } else {
-              console.log(`Connection attempt ${i + 1} failed`);
               if (i === retries - 1) {
                 setError('Failed to connect to Spotify after multiple attempts. Please check your internet connection and try refreshing the page.');
               }
             }
           } catch (err) {
-            console.error(`Connection error on attempt ${i + 1}:`, err);
             if (i === retries - 1) {
               setError('Failed to connect to Spotify. Please ensure you have Spotify Premium and try refreshing the page.');
             }
@@ -175,24 +151,24 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
     if (window.Spotify) {
       initializePlayer();
     } else {
-      // Ensure the callback is defined globally
-      if (typeof window.onSpotifyWebPlaybackSDKReady === 'undefined') {
-        window.onSpotifyWebPlaybackSDKReady = initializePlayer;
-      }
+      // Always set the SDK ready callback to our initializer (overrides any no-op)
+      window.onSpotifyWebPlaybackSDKReady = initializePlayer;
     }
+
+    hasInitializedRef.current = true;
 
     // Cleanup
     return () => {
       if (playerRef.current) {
-        console.log('Disconnecting Spotify player...');
         playerRef.current.disconnect();
         playerRef.current = null;
       }
     };
-  }, [token, refreshToken]);
+  }, [token]);
 
   const playTrack = async (uri: string) => {
-    if (!token || !deviceId) {
+    const authToken = tokenRef.current || token;
+    if (!authToken || !deviceId) {
       setError('Player not ready');
       return;
     }
@@ -205,7 +181,7 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
         }),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         },
       });
 
@@ -223,8 +199,9 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
   };
 
   const pausePlayback = async () => {
-    console.log('pausePlayback called - token:', !!token, 'deviceId:', deviceId);
-    if (!token || !deviceId) {
+    const authToken = tokenRef.current || token;
+    console.log('pausePlayback called - token:', !!authToken, 'deviceId:', deviceId);
+    if (!authToken || !deviceId) {
       console.error('Missing token or deviceId for pause');
       return;
     }
@@ -234,7 +211,7 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
       const response = await fetch(`https://api.spotify.com/v1/me/player/pause?device_id=${deviceId}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         },
       });
 
@@ -251,13 +228,14 @@ export const useSpotifyPlayer = (token: string | null, refreshToken?: () => Prom
   };
 
   const resumePlayback = async () => {
-    if (!token || !deviceId) return;
+    const authToken = tokenRef.current || token;
+    if (!authToken || !deviceId) return;
 
     try {
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         },
       });
 

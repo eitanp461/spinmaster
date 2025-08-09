@@ -7,9 +7,11 @@ interface CardProps {
   onPlay: () => void;
   isPlaying: boolean;
   canPlay: boolean;
+  overlayTopLeft?: React.ReactNode;
+  overlayTopRight?: React.ReactNode;
 }
 
-const Card: React.FC<CardProps> = ({ card, onFlip, onPlay, isPlaying, canPlay }) => {
+const Card: React.FC<CardProps> = ({ card, onFlip, onPlay, isPlaying, canPlay, overlayTopLeft, overlayTopRight }) => {
   const { track, isFlipped } = card;
 
   const formatArtists = (artists: { name: string }[]) => {
@@ -21,7 +23,37 @@ const Card: React.FC<CardProps> = ({ card, onFlip, onPlay, isPlaying, canPlay })
   };
 
   return (
-    <div className="card-container" onClick={onFlip}>
+    <div className="card-container" onClick={onFlip} style={{ position: 'relative' }}>
+      {(overlayTopLeft || overlayTopRight) && (
+        <div style={{ position: 'absolute', top: 8, left: 8, right: 8, display: 'flex', justifyContent: 'space-between', pointerEvents: 'none', zIndex: 2 }}>
+          <div style={{ pointerEvents: 'auto' }}>
+            {overlayTopLeft && (
+              <div style={{
+                padding: '6px 10px',
+                borderRadius: 999,
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                fontWeight: 700,
+                maxWidth: 180,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>{overlayTopLeft}</div>
+            )}
+          </div>
+          <div style={{ pointerEvents: 'auto' }}>
+            {overlayTopRight && (
+              <div style={{
+                padding: '6px 10px',
+                borderRadius: 999,
+                background: 'rgba(0,0,0,0.5)',
+                border: '1px solid rgba(255,255,255,0.3)',
+                fontWeight: 700
+              }}>{overlayTopRight}</div>
+            )}
+          </div>
+        </div>
+      )}
       <div className={`card ${isFlipped ? 'flipped' : ''}`}>
         {/* Front Side */}
         <div className="card-face card-front">
@@ -36,11 +68,8 @@ const Card: React.FC<CardProps> = ({ card, onFlip, onPlay, isPlaying, canPlay })
           >
             {isPlaying ? '⏸️' : '▶️'}
           </button>
-          <div className="card-instructions">
-            {canPlay ? 'Click to play the song' : 'Loading...'}
-          </div>
-          <div className="card-instructions" style={{ marginTop: '1rem', fontSize: '0.8rem' }}>
-            Click anywhere on the card to reveal the answer
+          <div className="card-instructions" style={{ opacity: 0.85 }}>
+            {canPlay ? 'Tap ▶ to play' : 'Loading...'}
           </div>
         </div>
 

@@ -7,12 +7,42 @@ import { useSpotifyPlayer } from '../hooks/useSpotifyPlayer';
 import { useSpotifyAPI } from '../hooks/useSpotifyAPI';
 import { SAMPLE_TRACKS } from '../config/spotify';
 
-const Game: React.FC = () => {
-  const { token, logout, refreshToken } = useSpotifyAuth();
-  const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token, refreshToken);
-  const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token, refreshToken);
+interface GameProps {
+  authToken?: string | null;
+  onRequestLogout?: () => void;
+  initialPlaylistUrl?: string | null;
+  headerExtras?: React.ReactNode;
+  controlsExtras?: React.ReactNode;
+  provideNextHandler?: (handler: () => void) => void;
+  provideRestartHandler?: (handler: () => void) => void;
+  providePreviousHandler?: (handler: () => void) => void;
+  hideDefaultNext?: boolean;
+  onNextCard?: (nextIndex: number, total: number) => void;
+  overlayTopLeftContent?: React.ReactNode;
+  overlayTopRightContent?: React.ReactNode;
+}
+
+const Game: React.FC<GameProps> = ({
+  authToken,
+  onRequestLogout,
+  initialPlaylistUrl,
+  headerExtras,
+  controlsExtras,
+  provideNextHandler,
+  provideRestartHandler,
+  providePreviousHandler,
+  hideDefaultNext,
+  onNextCard,
+  overlayTopLeftContent,
+  overlayTopRightContent,
+}) => {
+  const { token: hookToken, logout: hookLogout } = useSpotifyAuth();
+  const effectiveToken = authToken ?? hookToken;
+  const effectiveLogout = onRequestLogout ?? hookLogout;
+  const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(effectiveToken);
+  const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(effectiveToken);
   
-  console.log('Game component rendered - Token:', !!token, 'API Loading:', apiLoading, 'Player Ready:', isReady);
+  console.log('Game component rendered - Token:', !!effectiveToken, 'API Loading:', apiLoading, 'Player Ready:', isReady);
   
   const [cards, setCards] = useState<GameCard[]>([]);
   const [currentCardIndex, setCurrentCardIndex] = useState<number>(0);
@@ -27,16 +57,24 @@ const Game: React.FC = () => {
     owner: string;
     totalTracks: number;
   } | null>(null);
+  const [errorsEnabled, setErrorsEnabled] = useState<boolean>(false);
 
-  // Check for saved playlist URL on component mount
+  // Determine playlist source on mount: prefer prop from parent, else saved, else prompt
   useEffect(() => {
+    if (initialPlaylistUrl) {
+      setPlaylistUrl(initialPlaylistUrl);
+      localStorage.setItem('spinmaster_playlist_url', initialPlaylistUrl);
+      setShowPlaylistInput(false);
+      return;
+    }
     const savedPlaylistUrl = localStorage.getItem('spinmaster_playlist_url');
     if (savedPlaylistUrl) {
       setPlaylistUrl(savedPlaylistUrl);
+      setShowPlaylistInput(false);
     } else {
-      setShowPlaylistInput(true); // Show input if no playlist is saved
+      setShowPlaylistInput(true);
     }
-  }, []);
+  }, [initialPlaylistUrl]);
 
   // Utility function to extract playlist ID from Spotify URL
   const extractPlaylistId = (url: string): string | null => {
@@ -60,7 +98,7 @@ const Game: React.FC = () => {
       console.log('Initializing game...');
 
       // Check if we have a valid token
-      if (!token) {
+      if (!effectiveToken) {
         throw new Error('Authentication required. Please refresh the page and log in to Spotify.');
       }
 
@@ -136,12 +174,19 @@ const Game: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [token, getTracks, getPlaylistDetails, getPlaylistTracks, playlistUrl]); // Include playlist dependencies
+  }, [effectiveToken, getTracks, getPlaylistDetails, getPlaylistTracks, playlistUrl]); // Include playlist dependencies
+
+  // Initialize game when component mounts - only once per token
+  useEffect(() => {
+    // defer error display to avoid transient SDK/API flicker
+    const t = setTimeout(() => setErrorsEnabled(true), 1200);
+    return () => clearTimeout(t);
+  }, []);
 
   // Initialize game when component mounts - only once per token
   useEffect(() => {
     console.log('Game useEffect - conditions:', { 
-      hasToken: !!token, 
+      hasToken: !!effectiveToken, 
       isInitialized, 
       loading, 
       gameStarted,
@@ -150,13 +195,13 @@ const Game: React.FC = () => {
       showPlaylistInput
     });
     
-    if (token && !isInitialized && !gameStarted && !showPlaylistInput) {
+    if (effectiveToken && !isInitialized && !gameStarted && !showPlaylistInput && !!playlistUrl) {
       console.log('All conditions met - initializing game...');
       initializeGame();
     } else {
       console.log('Conditions not met for game initialization');
     }
-  }, [token, isInitialized, gameStarted, playlistUrl, showPlaylistInput, initializeGame]); // Added playlist dependencies
+  }, [effectiveToken, isInitialized, gameStarted, playlistUrl, showPlaylistInput, initializeGame]); // Added playlist dependencies
 
   const handleCardFlip = async (cardId: string) => {
     // Pause playback when card is flipped (revealing the answer)
@@ -205,7 +250,15 @@ const Game: React.FC = () => {
     }
 
     if (currentCardIndex < cards.length - 1) {
+      const nextIndex = currentCardIndex + 1;
       setCurrentCardIndex(prev => prev + 1);
+      if (onNextCard) {
+        try {
+          onNextCard(nextIndex, cards.length);
+        } catch (err) {
+          console.error('onNextCard callback error:', err);
+        }
+      }
     }
   };
 
@@ -239,6 +292,31 @@ const Game: React.FC = () => {
     setError(null);
     // initializeGame will be called by useEffect due to state changes
   };
+
+  // Expose internal handlers to parent if requested
+  useEffect(() => {
+    if (provideNextHandler) {
+      provideNextHandler(() => {
+        handleNextCard();
+      });
+    }
+  }, [provideNextHandler, currentCardIndex, cards.length, isPlaying]);
+
+  useEffect(() => {
+    if (providePreviousHandler) {
+      providePreviousHandler(() => {
+        handlePreviousCard();
+      });
+    }
+  }, [providePreviousHandler, currentCardIndex, isPlaying]);
+
+  useEffect(() => {
+    if (provideRestartHandler) {
+      provideRestartHandler(() => {
+        handleRestart();
+      });
+    }
+  }, [provideRestartHandler]);
 
   // Handle playlist URL submission
   const handlePlaylistSubmit = (url: string) => {
@@ -287,7 +365,7 @@ const Game: React.FC = () => {
         <div className="loading">
           <div className="spinner"></div>
           <p>Loading game...</p>
-          <div style={{ marginTop: '2rem', fontSize: '0.8rem', opacity: 0.7 }}>
+          <div style={{ marginTop: '2rem', fontSize: '0.8rem', opacity: 0.7, textAlign: 'center' }}>
             <p>If this takes too long, check the browser console for errors</p>
             <button 
               className="control-button" 
@@ -306,6 +384,17 @@ const Game: React.FC = () => {
   }
 
   if (displayError) {
+    if (!errorsEnabled) {
+      // Suppress transient errors while the SDK/API are initializing
+      return (
+        <div className="game-container">
+          <div className="loading">
+            <div className="spinner"></div>
+            <p>Preparing player...</p>
+          </div>
+        </div>
+      );
+    }
     const isAuthError = displayError.toLowerCase().includes('authentication') || 
                        displayError.toLowerCase().includes('session') ||
                        displayError.toLowerCase().includes('expired') ||
@@ -317,7 +406,7 @@ const Game: React.FC = () => {
           <h3>{isAuthError ? 'Authentication Error' : 'Game Error'}</h3>
           <p>{displayError}</p>
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-            {isAuthError ? (
+             {isAuthError ? (
               <>
                               <button className="control-button" onClick={() => {
                 localStorage.removeItem('spotify_access_token');
@@ -328,7 +417,7 @@ const Game: React.FC = () => {
               }}>
                 🔄 Refresh & Login
               </button>
-                <button className="control-button" onClick={logout}>
+                <button className="control-button" onClick={effectiveLogout}>
                   🚪 Logout
                 </button>
               </>
@@ -343,7 +432,7 @@ const Game: React.FC = () => {
                 }}>
                   🧹 Clear & Restart
                 </button>
-                <button className="control-button" onClick={logout}>
+                <button className="control-button" onClick={effectiveLogout}>
                   🚪 Logout
                 </button>
               </>
@@ -352,7 +441,7 @@ const Game: React.FC = () => {
           <details style={{ marginTop: '1rem', fontSize: '0.8rem', opacity: 0.7 }}>
             <summary>Debug Info</summary>
             <div style={{ marginTop: '0.5rem', textAlign: 'left' }}>
-              <p>Token available: {token ? 'Yes' : 'No'}</p>
+              <p>Token available: {effectiveToken ? 'Yes' : 'No'}</p>
               <p>Cards loaded: {cards.length}</p>
               <p>Game started: {gameStarted ? 'Yes' : 'No'}</p>
               <p>Player ready: {isReady ? 'Yes' : 'No'}</p>
@@ -394,9 +483,7 @@ const Game: React.FC = () => {
             />
             <h1 className="game-title">SpinMaster</h1>
           </div>
-          <p className="game-subtitle">
-            Listen to the song, guess the details, then flip to see the answer!
-          </p>
+          {/* Subtitle removed to reduce vertical space */}
           {playlistInfo && (
             <div style={{ 
               color: 'rgba(255, 255, 255, 0.9)', 
@@ -416,6 +503,7 @@ const Game: React.FC = () => {
               </div>
             </div>
           )}
+          {headerExtras}
           {!isReady && (
             <div style={{ color: '#ffeb3b', fontSize: '0.9rem', marginTop: '1rem' }}>
               ⚠️ Spotify player is not ready. Make sure you have Spotify Premium and try refreshing the page.
@@ -431,14 +519,11 @@ const Game: React.FC = () => {
           onCardPlay={handleCardPlay}
           isPlaying={isPlaying}
           canPlay={isReady}
+          overlayTopLeft={overlayTopLeftContent}
+          overlayTopRight={overlayTopRightContent ?? <span>{currentCardIndex + 1}/{cards.length}</span>}
         />
 
-        {/* Card Counter - Separate row */}
-        <div className="card-counter-row">
-          <div className="card-counter-display">
-            Card {currentCardIndex + 1} of {cards.length}
-          </div>
-        </div>
+        {/* Card counter removed; using X/Y overlay on card */}
 
         {/* Game Controls */}
         <div className="game-controls">
@@ -466,13 +551,15 @@ const Game: React.FC = () => {
             🎉 Play Again
           </button>
           ) : (
-            <button
-              className="control-button"
-              onClick={handleNextCard}
-              disabled={currentCardIndex >= cards.length - 1}
-            >
-              Next →
-            </button>
+            !hideDefaultNext && (
+              <button
+                className="control-button"
+                onClick={handleNextCard}
+                disabled={currentCardIndex >= cards.length - 1}
+              >
+                Next →
+              </button>
+            )
           )}
           
           <button
@@ -485,11 +572,13 @@ const Game: React.FC = () => {
           
           <button
             className="control-button"
-            onClick={logout}
+            onClick={effectiveLogout}
             style={{ background: 'rgba(244, 67, 54, 0.3)' }}
           >
             Logout
           </button>
+
+          {controlsExtras}
         </div>
       </div>
 
