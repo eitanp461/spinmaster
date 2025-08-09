@@ -7,8 +7,12 @@
     <link rel="apple-touch-icon" href="./SpinMaster.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Spinmaster</title>
+    <script>
+      // Define a safe default for Spotify SDK callback to prevent early-load errors
+      window.onSpotifyWebPlaybackSDKReady = window.onSpotifyWebPlaybackSDKReady || function () {};
+    </script>
     <script src="https://sdk.scdn.co/spotify-player.js"></script>
-    <script type="module" crossorigin src="/spinmaster/assets/index-Dt34WuT3.js"></script>
+    <script type="module" crossorigin src="/spinmaster/assets/index-rLxHm0z8.js"></script>
     <link rel="stylesheet" crossorigin href="/spinmaster/assets/index-u1Pz-q4F.css">
   </head>
   <body>
