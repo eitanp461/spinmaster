@@ -22,7 +22,7 @@ const ModeSelect: React.FC<ModeSelectProps> = ({ onSelect }) => {
       <div className="auth-container" style={{ paddingTop: '2rem' }}>
         <div style={{ marginBottom: '1rem' }}>
           <img
-            src="./SpinMaster.png"
+            src="https://eitanpeer-res.cloudinary.com/image/upload/w_128,h_128,dpr_2,q_auto,f_auto/v1754768233/spinmaster/SpinMaster.png"
             alt="SpinMaster Logo"
             style={{ width: '100px', height: '100px', borderRadius: '50%', boxShadow: '0 4px 8px rgba(0,0,0,0.2)' }}
           />

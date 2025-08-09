@@ -472,7 +472,7 @@ const Game: React.FC<GameProps> = ({
         <div className="game-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifyContent: 'center', marginBottom: '0.5rem' }}>
             <img 
-              src="./SpinMaster.png" 
+              src="https://eitanpeer-res.cloudinary.com/image/upload/w_128,h_128,dpr_2,q_auto,f_auto/v1754768233/spinmaster/SpinMaster.png" 
               alt="SpinMaster Logo" 
               style={{ 
                 width: '60px', 

@@ -24,7 +24,7 @@ const PlaylistInput: React.FC<PlaylistInputProps> = ({ onSubmit, error }) => {
     <div className="auth-container">
       <div style={{ marginBottom: '1rem' }}>
         <img 
-          src="./SpinMaster.png" 
+          src="https://eitanpeer-res.cloudinary.com/image/upload/w_128,h_128,dpr_2,q_auto,f_auto/v1754768233/spinmaster/SpinMaster.png" 
           alt="SpinMaster Logo" 
           style={{ 
             width: '80px', 

@@ -8,7 +8,8 @@ const getRedirectUri = () => {
 };
 
 export const SPOTIFY_CONFIG = {
-  CLIENT_ID: 'cd63ccc791a74dcabe3003a0369affef',
+  // Read from Vite env. Do NOT commit real client IDs to the repo.
+  CLIENT_ID: (import.meta as any).env?.VITE_SPOTIFY_CLIENT_ID || '',
   REDIRECT_URI: getRedirectUri(),
   SCOPES: [
     'streaming',
