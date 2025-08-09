@@ -11,6 +11,7 @@ export const useSpotifyPlayer = (token: string | null) => {
   const playerRef = useRef<SpotifyPlayer | null>(null);
   const tokenRef = useRef<string | null>(token);
   const hasInitializedRef = useRef<boolean>(false);
+  const isRecoveringRef = useRef<boolean>(false);
 
   // Check if user has Spotify Premium
   const checkPremiumStatus = async () => {
@@ -113,6 +114,14 @@ export const useSpotifyPlayer = (token: string | null) => {
       spotifyPlayer.addListener('not_ready', ({ device_id }: { device_id: string }) => {
         console.log('Device ID has gone offline', device_id);
         setIsReady(false);
+        // Attempt a best-effort reconnection in the background
+        (async () => {
+          try {
+            await connectWithRetry(3);
+          } catch {
+            // swallow
+          }
+        })();
       });
 
       // Connect to the player with retry logic
@@ -166,14 +175,61 @@ export const useSpotifyPlayer = (token: string | null) => {
     };
   }, [token]);
 
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const getAuthToken = () => tokenRef.current || token;
+
+  const transferToThisDevice = async (play: boolean) => {
+    const authToken = getAuthToken();
+    if (!authToken || !deviceId) return;
+    await fetch('https://api.spotify.com/v1/me/player', {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device_ids: [deviceId], play }),
+    });
+  };
+
+  const ensureActiveDevice = async (attemptTransfer = true): Promise<boolean> => {
+    const authToken = getAuthToken();
+    if (!authToken || !deviceId) return false;
+
+    try {
+      const devicesResp = await fetch('https://api.spotify.com/v1/me/player/devices', {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (!devicesResp.ok) return false;
+      const devicesData = await devicesResp.json();
+      const ours = (devicesData.devices || []).find((d: any) => d.id === deviceId);
+      if (!ours) {
+        try { await playerRef.current?.connect(); } catch {}
+        await sleep(500);
+        return false;
+      }
+      if (ours.is_active) return true;
+      if (attemptTransfer) {
+        await transferToThisDevice(false);
+        await sleep(300);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const playTrack = async (uri: string) => {
     const authToken = tokenRef.current || token;
     if (!authToken || !deviceId) {
-      setError('Player not ready');
+      console.warn('Player not ready; attempting background recovery');
+      try { await playerRef.current?.connect(); } catch {}
       return;
     }
 
     try {
+      isRecoveringRef.current = true;
+      await ensureActiveDevice(true);
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -186,15 +242,53 @@ export const useSpotifyPlayer = (token: string | null) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || 'Failed to play track');
+        let status = response.status;
+        let message = 'Failed to play track';
+        try {
+          const errorData = await response.json();
+          message = errorData.error?.message || message;
+        } catch {}
+
+        const lower = message.toLowerCase();
+        if (status === 404 || (lower.includes('device') && lower.includes('not'))) {
+          console.warn('Device not found/active; transferring to this device and retrying');
+          await transferToThisDevice(true);
+          await sleep(400);
+          const retryResp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: 'PUT',
+            body: JSON.stringify({ uris: [uri] }),
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+          });
+          if (!retryResp.ok) {
+            let retryMsg = 'Failed to play track';
+            try { const d = await retryResp.json(); retryMsg = d.error?.message || retryMsg; } catch {}
+            if (/restriction/i.test(retryMsg)) {
+              console.warn('Restriction violation when playing track; skipping without surfacing fatal error');
+              setError(null);
+              return;
+            }
+            throw new Error(retryMsg);
+          }
+        } else if (/restriction/i.test(lower)) {
+          console.warn('Restriction violation when playing track; skipping without surfacing fatal error');
+          setError(null);
+          return;
+        } else {
+          throw new Error(message);
+        }
       }
 
       setError(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to play track';
-      setError(errorMessage);
+      if (!/restriction/i.test(errorMessage) && !/device/i.test(errorMessage)) {
+        setError(errorMessage);
+      } else {
+        setError(null);
+      }
       console.error('Play error:', err);
+    } finally {
+      isRecoveringRef.current = false;
     }
   };
 
@@ -232,6 +326,7 @@ export const useSpotifyPlayer = (token: string | null) => {
     if (!authToken || !deviceId) return;
 
     try {
+      await ensureActiveDevice(true);
       const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
         headers: {
@@ -240,7 +335,17 @@ export const useSpotifyPlayer = (token: string | null) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to resume playback');
+        if (response.status === 404) {
+          await transferToThisDevice(true);
+          await sleep(300);
+          const retryResp = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${authToken}` },
+          });
+          if (!retryResp.ok) throw new Error('Failed to resume playback');
+        } else {
+          throw new Error('Failed to resume playback');
+        }
       }
     } catch (err) {
       console.error('Resume error:', err);

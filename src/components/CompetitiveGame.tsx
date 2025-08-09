@@ -21,6 +21,7 @@ const CompetitiveGame: React.FC<CompetitiveGameProps> = ({ players: initialPlaye
   const [winnerId, setWinnerId] = useState<string | null>(null);
 
   const nextHandlerRef = useRef<() => void>();
+  const awardBtnRef = useRef<HTMLButtonElement | null>(null);
 
   const currentPlayer = players[currentIdx];
 
@@ -35,6 +36,8 @@ const CompetitiveGame: React.FC<CompetitiveGameProps> = ({ players: initialPlaye
     setPlayers(prev => prev.map((p, i) => (i === currentIdx ? { ...p, score: p.score + points } : p)));
     setScoreInputText('');
   };
+
+  // Width is now handled purely via CSS (.points-input)
 
   // Rotate player each time the Game goes next
   const handleNextFromGame = () => {
@@ -52,6 +55,13 @@ const CompetitiveGame: React.FC<CompetitiveGameProps> = ({ players: initialPlaye
     }
   }, [players]);
 
+  // If the scoreboard is opened after a win, hide the winner modal
+  useEffect(() => {
+    if (scoreboardOpen && winnerId) {
+      setWinnerId(null);
+    }
+  }, [scoreboardOpen, winnerId]);
+
   const headerExtras = (
     <div style={{ marginTop: '0.5rem', display: 'flex', justifyContent: 'center' }}>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -67,10 +77,10 @@ const CompetitiveGame: React.FC<CompetitiveGameProps> = ({ players: initialPlaye
             }
           }}
           placeholder="Points"
-          style={{ width: 84, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.25)', background: 'rgba(255,255,255,0.1)', color: 'white', fontWeight: 700 }}
+          className="points-input"
           aria-label="Points to award"
         />
-        <button className="control-button" onClick={awardPoints} style={{ background: 'rgba(33, 150, 243, 0.35)' }}>
+        <button className="control-button" ref={awardBtnRef} onClick={awardPoints} style={{ background: 'rgba(33, 150, 243, 0.35)' }}>
           ➕ Award
         </button>
         <button className="control-button" onClick={() => setScoreboardOpen(true)} style={{ background: 'rgba(33, 150, 243, 0.3)' }}>
@@ -114,7 +124,7 @@ const CompetitiveGame: React.FC<CompetitiveGameProps> = ({ players: initialPlaye
             <h3 style={{ marginTop: 0 }}>🎉 {players.find(p => p.id === winnerId)?.name} wins!</h3>
             <p style={{ opacity: 0.9 }}>Reached {WIN_POINTS} points</p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', marginTop: '0.75rem' }}>
-              <button className="control-button" onClick={() => setScoreboardOpen(true)}>
+              <button className="control-button" onClick={() => { setScoreboardOpen(true); setWinnerId(null); }}>
                 View Scoreboard
               </button>
               {onExit && (

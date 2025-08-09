@@ -216,6 +216,19 @@ body {
   margin: 0 auto;
 }
 
+/* Competitive points input should visually match control buttons */
+.points-input {
+  padding: 12px 20px;
+  border-radius: 25px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 0.9rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-weight: 700;
+  min-width: 140px;
+  text-align: center;
+}
+
 .control-button {
   padding: 12px 20px;
   border: none;
@@ -363,6 +376,12 @@ body {
     font-size: 0.8rem;
     min-width: 110px;
   }
+
+  .points-input {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    min-width: 110px;
+  }
   
   .card-container {
     width: 260px;
@@ -411,6 +430,13 @@ body {
     padding: 8px 12px;
     font-size: 0.75rem;
     min-width: 100px;
+  }
+
+  .points-input {
+    padding: 8px 12px;
+    font-size: 0.75rem;
+    min-width: 100px;
+    width: 1rem;
   }
   
   .track-name {
