@@ -225,7 +225,7 @@ export const useSpotifyAuth = () => {
         console.error('Token refresh failed:', errorData);
         
         // If refresh token is invalid, clear all auth data
-        if (response.status === 400 && errorData.error === 'invalid_grant') {
+        if (response.status === 400 && (errorData.error === 'invalid_grant' || errorData.error === 'invalid_request')) {
           console.log('Refresh token invalid, clearing auth state');
           logout();
           return false;
@@ -235,7 +235,7 @@ export const useSpotifyAuth = () => {
       }
 
       const tokenData: SpotifyAuthToken = await response.json();
-      console.log('Token refresh successful');
+      console.log('Token refresh successful, new token expires in:', tokenData.expires_in, 'seconds');
 
       // Update stored tokens
       const expiryTime = Date.now() + (tokenData.expires_in * 1000);
@@ -245,6 +245,7 @@ export const useSpotifyAuth = () => {
       // Update refresh token if a new one is provided
       if (tokenData.refresh_token) {
         localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
+        console.log('Refresh token also updated');
       }
 
       // Update state
@@ -256,6 +257,13 @@ export const useSpotifyAuth = () => {
     } catch (err) {
       console.error('Token refresh error:', err);
       setError(err instanceof Error ? err.message : 'Token refresh failed');
+      
+      // If refresh fails completely, logout to force re-auth
+      if (err instanceof Error && err.message.includes('invalid')) {
+        console.log('Invalid token error, logging out...');
+        logout();
+      }
+      
       return false;
     } finally {
       setIsRefreshing(false);
@@ -292,6 +300,36 @@ export const useSpotifyAuth = () => {
       checkAndRefreshToken();
     }
   }, [refreshToken, isLoading, isAuthenticated, isProcessingCallback]);
+
+  // Set up periodic token refresh
+  useEffect(() => {
+    if (!token || !isAuthenticated) return;
+
+    const checkTokenExpiry = () => {
+      const savedExpiry = localStorage.getItem('spotify_token_expiry');
+      const savedRefreshToken = localStorage.getItem('spotify_refresh_token');
+      
+      if (savedExpiry && savedRefreshToken) {
+        const expiryTime = parseInt(savedExpiry);
+        const bufferTime = 10 * 60 * 1000; // 10 minutes buffer
+        const now = Date.now();
+        
+        // If token will expire soon, refresh it proactively
+        if (now >= (expiryTime - bufferTime)) {
+          console.log('Token will expire soon, refreshing proactively...');
+          refreshToken();
+        }
+      }
+    };
+
+    // Check every 5 minutes
+    const interval = setInterval(checkTokenExpiry, 5 * 60 * 1000);
+    
+    // Also check immediately
+    checkTokenExpiry();
+    
+    return () => clearInterval(interval);
+  }, [token, isAuthenticated, refreshToken]);
 
   const login = async () => {
     try {

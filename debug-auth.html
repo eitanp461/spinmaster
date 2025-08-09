@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Auth Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-info { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Spotify Authentication Debug</h1>
+    
+    <div id="auth-status" class="debug-info">
+        <h3>Authentication Status</h3>
+        <div id="auth-details">Loading...</div>
+    </div>
+    
+    <div class="debug-info">
+        <h3>Actions</h3>
+        <button onclick="checkTokens()">Check Stored Tokens</button>
+        <button onclick="testAPICall()">Test API Call</button>
+        <button onclick="checkPremium()">Check Premium Status</button>
+        <button onclick="clearStorage()">Clear All Storage</button>
+    </div>
+    
+    <div id="results" class="debug-info">
+        <h3>Results</h3>
+        <div id="results-content">Click a button to see results</div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results-content');
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : '';
+            results.innerHTML += `<div class="${className}">[${new Date().toLocaleTimeString()}] ${message}</div>`;
+        }
+
+        function checkTokens() {
+            log('Checking stored tokens...');
+            
+            const token = localStorage.getItem('spotify_access_token');
+            const expiry = localStorage.getItem('spotify_token_expiry');
+            const refresh = localStorage.getItem('spotify_refresh_token');
+            const authCompleted = localStorage.getItem('spotify_auth_completed');
+            
+            log(`Access Token: ${token ? 'Present (' + token.substring(0, 20) + '...)' : 'Not found'}`, token ? 'success' : 'error');
+            log(`Refresh Token: ${refresh ? 'Present (' + refresh.substring(0, 20) + '...)' : 'Not found'}`, refresh ? 'success' : 'error');
+            log(`Auth Completed: ${authCompleted || 'Not set'}`);
+            
+            if (expiry) {
+                const expiryTime = parseInt(expiry);
+                const now = Date.now();
+                const timeLeft = Math.round((expiryTime - now) / 60000);
+                log(`Token Expiry: ${new Date(expiryTime).toLocaleString()}`, timeLeft > 5 ? 'success' : 'error');
+                log(`Time until expiry: ${timeLeft} minutes`, timeLeft > 5 ? 'success' : 'error');
+            } else {
+                log('Token Expiry: Not set', 'error');
+            }
+        }
+
+        async function testAPICall() {
+            log('Testing API call...');
+            
+            const token = localStorage.getItem('spotify_access_token');
+            if (!token) {
+                log('No access token found', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://api.spotify.com/v1/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    log(`API call successful! User: ${data.display_name} (${data.product})`, 'success');
+                    log(`User ID: ${data.id}, Country: ${data.country}`);
+                } else {
+                    log(`API call failed: ${response.status} ${response.statusText}`, 'error');
+                    const errorData = await response.json().catch(() => null);
+                    if (errorData) {
+                        log(`Error details: ${JSON.stringify(errorData)}`, 'error');
+                    }
+                }
+            } catch (err) {
+                log(`API call error: ${err.message}`, 'error');
+            }
+        }
+
+        async function checkPremium() {
+            log('Checking Spotify Premium status...');
+            
+            const token = localStorage.getItem('spotify_access_token');
+            if (!token) {
+                log('No access token found', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('https://api.spotify.com/v1/me', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const isPremium = data.product === 'premium';
+                    log(`Premium Status: ${data.product}`, isPremium ? 'success' : 'error');
+                    
+                    if (!isPremium) {
+                        log('⚠️ Spotify Premium is required for Web Playback SDK!', 'error');
+                        log('The authentication errors you\'re seeing are likely because you don\'t have Premium', 'error');
+                    } else {
+                        log('✅ You have Spotify Premium - Web Playback should work', 'success');
+                    }
+                } else {
+                    log(`Failed to check premium status: ${response.status}`, 'error');
+                }
+            } catch (err) {
+                log(`Premium check error: ${err.message}`, 'error');
+            }
+        }
+
+        function clearStorage() {
+            log('Clearing all localStorage...');
+            localStorage.clear();
+            log('Storage cleared', 'success');
+            updateAuthStatus();
+        }
+
+        function updateAuthStatus() {
+            const token = localStorage.getItem('spotify_access_token');
+            const expiry = localStorage.getItem('spotify_token_expiry');
+            const authDetails = document.getElementById('auth-details');
+            
+            if (token && expiry) {
+                const expiryTime = parseInt(expiry);
+                const now = Date.now();
+                const isExpired = now >= expiryTime;
+                
+                authDetails.innerHTML = `
+                    <div class="${isExpired ? 'error' : 'success'}">
+                        Status: ${isExpired ? 'Token Expired' : 'Authenticated'}
+                    </div>
+                    <div>Expires: ${new Date(expiryTime).toLocaleString()}</div>
+                `;
+            } else {
+                authDetails.innerHTML = '<div class="error">Not authenticated</div>';
+            }
+        }
+
+        // Initialize
+        updateAuthStatus();
+        
+        // Update status every 30 seconds
+        setInterval(updateAuthStatus, 30000);
+    </script>
+</body>
+</html>

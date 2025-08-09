@@ -9,7 +9,7 @@ import { SAMPLE_TRACKS } from '../config/spotify';
 
 const Game: React.FC = () => {
   const { token, logout, refreshToken } = useSpotifyAuth();
-  const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token);
+  const { isReady, isPlaying, playTrack, togglePlayback, error: playerError } = useSpotifyPlayer(token, refreshToken);
   const { getTracks, getPlaylistDetails, getPlaylistTracks, loading: apiLoading, error: apiError } = useSpotifyAPI(token, refreshToken);
   
   console.log('Game component rendered - Token:', !!token, 'API Loading:', apiLoading, 'Player Ready:', isReady);
