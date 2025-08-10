@@ -167,9 +167,17 @@ const Game: React.FC<GameProps> = ({
       setGameStarted(true);
       console.log('Game initialized successfully with', shuffledCards.length, 'cards');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize game';
-      setError(errorMessage);
-      setIsInitialized(false); // Reset on error so user can retry
+      const baseMessage = err instanceof Error ? err.message : 'Failed to initialize game';
+      const friendlyHint = ' This playlist may be private, collaborative without permission, or otherwise unavailable. Please choose a different playlist.';
+      // Fail fast: surface error, clear saved playlist, and prompt for another one
+      const combinedMessage = baseMessage + friendlyHint;
+      setError(combinedMessage);
+      // Prevent re-initialization loop by clearing the playlist and showing the input
+      localStorage.removeItem('spinmaster_playlist_url');
+      setPlaylistUrl('');
+      setShowPlaylistInput(true);
+      setIsInitialized(false);
+      setGameStarted(false);
       console.error('Game initialization error:', err);
     } finally {
       setLoading(false);
@@ -423,6 +431,9 @@ const Game: React.FC<GameProps> = ({
               </>
             ) : (
               <>
+                <button className="control-button" onClick={handleChangePlaylist} style={{ background: 'rgba(255, 193, 7, 0.3)' }}>
+                  🎵 Choose Different Playlist
+                </button>
                 <button className="control-button" onClick={handleFullRestart}>
                   🔄 Retry
                 </button>
